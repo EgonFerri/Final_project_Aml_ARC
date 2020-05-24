@@ -78,7 +78,7 @@ def plot_task(task):
     plt.show()
     
     
-def check_dim(dataset='train'):
+def check_dim(data_path, dataset='train'):
     """
     checks the dimensions of the tasks 
     
@@ -102,7 +102,7 @@ def check_dim(dataset='train'):
     if dataset == 'test':
         leng=100
     for t in range(0, leng):
-        task = get_task(dataset, t)
+        task = get_task(data_path, dataset, t)
         inp = []
         out = []
         for i in task['train']:
