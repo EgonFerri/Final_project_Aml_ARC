@@ -11,7 +11,7 @@ from utils import expand
 
 class TaskSolver:        
 
-    def train(self, task, model_name, criterion, n_epoch=30, lr=0.1, device = "cpu", verbose=True):
+    def train(self, tasks, model_name, criterion, n_epoch=30, lr=0.1, device = "cpu", verbose=True):
         """
         trains the given model
         
@@ -26,126 +26,146 @@ class TaskSolver:
         :returns: the obtained metrics, the final predictions and the wrong ones
         """
         
-        loss_train = []
-        loss_val = []
-        accuracy_val = []
-        accuracy_train = []
-        accuracy_val_pix = []
-        accuracy_train_pix = []
-
-        sh1_big = 0
-        sh2_big = 0
-        for i in range(len(task['train'])):
-            sh1 = task['train'][i]['input'].shape[0]
-            sh2 = task['train'][i]['input'].shape[1]
-            if sh1 > sh1_big:
-                sh1_big = sh1
-            if sh2 > sh2_big:
-                sh2_big = sh2     
-        for i in range(len(task['test'])):
-            sh1 = task['test'][i]['input'].shape[0]
-            sh2 = task['test'][i]['input'].shape[1]
-            if sh1 > sh1_big:
-                sh1_big = sh1
-            if sh2 > sh2_big:
-                sh2_big = sh2  
-
-        net = model_name(task['train'], sh1_big, sh2_big).to(device)
+        total_loss_train = []
+        total_loss_val = []
+        total_accuracy_val = []
+        total_accuracy_train = []
+        total_accuracy_val_pix = []
+        total_accuracy_train_pix = []
+        total_predictions = []
+        total_wrong_predictions = []
+        
         criterion = criterion()
-        optimizer = Adam(net.parameters(), lr = lr)
+        for task in tasks:
+            
+            sh1_big = 0
+            sh2_big = 0
+            for i in range(len(task['train'])):
+                sh1 = task['train'][i]['input'].shape[0]
+                sh2 = task['train'][i]['input'].shape[1]
+                if sh1 > sh1_big:
+                    sh1_big = sh1
+                if sh2 > sh2_big:
+                    sh2_big = sh2     
+            for i in range(len(task['test'])):
+                sh1 = task['test'][i]['input'].shape[0]
+                sh2 = task['test'][i]['input'].shape[1]
+                if sh1 > sh1_big:
+                    sh1_big = sh1
+                if sh2 > sh2_big:
+                    sh2_big = sh2  
+                    
+            net = model_name(task['train'], sh1_big, sh2_big).to(device)
+            optimizer = Adam(net.parameters(), lr = lr)
         
-        for epoch in tqdm(range(n_epoch)):
-        
-            net.train()
-            loss_iter = 0
-            for sample in task['train']:
-                img = FloatTensor(expand(sample['input'])).to(device)
-                labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
-                optimizer.zero_grad()    
-                outputs = net(img)
-                loss = criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()  
-                  
-            net.eval()
-            with torch.no_grad():
+            loss_train = []
+            loss_val = []
+            accuracy_val = []
+            accuracy_train = []
+            accuracy_val_pix = []
+            accuracy_train_pix = []
 
-                correct_val = 0
-                correct_val_pix = 0
-                total_val = 0
-                loss_iter_val = 0
-                predictions = []
-                wrong_pred = []
-                n_pixels_val = 0
-                for sample in task['test']:
+            for epoch in tqdm(range(n_epoch)):
+
+                net.train()
+                loss_iter = 0
+                for sample in task['train']:
+                    img = FloatTensor(expand(sample['input'])).to(device)
+                    labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
+                    optimizer.zero_grad()    
+                    outputs = net(img)
+                    loss = criterion(outputs, labels)
+                    loss.backward()
+                    optimizer.step()  
+
+                net.eval()
+                with torch.no_grad():
+
+                    correct_val = 0
+                    correct_val_pix = 0
+                    total_val = 0
+                    loss_iter_val = 0
+                    predictions = []
+                    wrong_pred = []
+                    n_pixels_val = 0
+                    for sample in task['test']:
+
+                        img = FloatTensor(expand(sample['input'])).to(device)
+                        labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
+                        outputs = net(img)
+                        _, pred = torch.max(outputs.data, 1)
+                        predictions.append((img, pred))  
+                        n_pixels_val += pred.shape[1]*pred.shape[2]
+
+                        total_val += labels.size(0)
+                        flag =  (torch.all(torch.eq(pred, labels))).sum().item() 
+                        correct_val += flag
+                        if flag == 0:
+                            wrong_pred.append((img, pred))
+                        correct_val_pix += (torch.eq(pred, labels)).sum().item()            
+                        loss = criterion(outputs, labels)
+                        loss_iter_val += loss.item()
+
+                correct_train = 0
+                correct_train_pix = 0 
+                total_train = 0
+                loss_iter_train = 0
+                n_pixels_train = 0
+                for sample in task['train']:
 
                     img = FloatTensor(expand(sample['input'])).to(device)
                     labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
                     outputs = net(img)
                     _, pred = torch.max(outputs.data, 1)
-                    predictions.append((img, pred))  
-                    n_pixels_val += pred.shape[1]*pred.shape[2]
+                    n_pixels_train += pred.shape[1]*pred.shape[2]
 
-                    total_val += labels.size(0)
-                    flag =  (torch.all(torch.eq(pred, labels))).sum().item() 
-                    correct_val += flag
-                    if flag == 0:
-                        wrong_pred.append((img, pred))
-                    correct_val_pix += (torch.eq(pred, labels)).sum().item()            
+                    total_train += labels.size(0)
+                    correct_train += (torch.all(torch.eq(pred, labels))).sum().item()
+                    correct_train_pix += (torch.eq(pred, labels)).sum().item()
                     loss = criterion(outputs, labels)
-                    loss_iter_val += loss.item()
+                    loss_iter_train += loss.item()
 
-            correct_train = 0
-            correct_train_pix = 0 
-            total_train = 0
-            loss_iter_train = 0
-            n_pixels_train = 0
-            for sample in task['train']:
+                loss_train.append(loss_iter_train/len(task['train']))
+                loss_val.append(loss_iter_val/len(task['test']))
 
-                img = FloatTensor(expand(sample['input'])).to(device)
-                labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
-                outputs = net(img)
-                _, pred = torch.max(outputs.data, 1)
-                n_pixels_train += pred.shape[1]*pred.shape[2]
+                val_accuracy = 100 * correct_val / total_val
+                val_accuracy_pix = 100 * correct_val_pix/(n_pixels_val)
+                accuracy_val.append(val_accuracy)
+                accuracy_val_pix.append(val_accuracy_pix)
 
-                total_train += labels.size(0)
-                correct_train += (torch.all(torch.eq(pred, labels))).sum().item()
-                correct_train_pix += (torch.eq(pred, labels)).sum().item()
-                loss = criterion(outputs, labels)
-                loss_iter_train += loss.item()
-              
-            loss_train.append(loss_iter_train/len(task['train']))
-            loss_val.append(loss_iter_val/len(task['test']))
+                train_accuracy = 100 * correct_train / total_train
+                train_accuracy_pix = 100 * correct_train_pix/(n_pixels_train)
+                accuracy_train.append(train_accuracy)
+                accuracy_train_pix.append(train_accuracy_pix)
 
-            val_accuracy = 100 * correct_val / total_val
-            val_accuracy_pix = 100 * correct_val_pix/(n_pixels_val)
-            accuracy_val.append(val_accuracy)
-            accuracy_val_pix.append(val_accuracy_pix)
+                if verbose:
+                    print('\nEpoch: ['+str(epoch+1)+'/'+str(n_epoch)+']')
+                    print('Train loss is: {}'.format(loss_train[-1]))
+                    print('Validation loss is: {}'.format(loss_val[-1]))
+                    print('Train accuracy is: {} %'.format(accuracy_train[-1]))
+                    print('Train accuracy for pixels is: {} %'.format(accuracy_train_pix[-1]))
+                    print('Validation accuracy is: {} %'.format(accuracy_val[-1]))
+                    print('Validation accuracy for pixels is: {} %'.format(accuracy_val_pix[-1]))
+                    
+                total_loss_train.append(loss_train)
+                total_loss_val.append(loss_val)
+                total_accuracy_train.append(accuracy_train)
+                total_accuracy_train_pix.append(accuracy_train_pix)
+                total_accuracy_val.append(accuracy_val)
+                total_accuracy_val_pix.append(accuracy_val_pix)
+                total_predictions.append(predictions)
+                total_wrong_predictions.append(wrong_pred)
 
-            train_accuracy = 100 * correct_train / total_train
-            train_accuracy_pix = 100 * correct_train_pix/(n_pixels_train)
-            accuracy_train.append(train_accuracy)
-            accuracy_train_pix.append(train_accuracy_pix)
-
-            if verbose:
-                print('\nEpoch: ['+str(epoch+1)+'/'+str(n_epoch)+']')
-                print('Train loss is: {}'.format(loss_train[-1]))
-                print('Validation loss is: {}'.format(loss_val[-1]))
-                print('Train accuracy is: {} %'.format(accuracy_train[-1]))
-                print('Train accuracy for pixels is: {} %'.format(accuracy_train_pix[-1]))
-                print('Validation accuracy is: {} %'.format(accuracy_val[-1]))
-                print('Validation accuracy for pixels is: {} %'.format(accuracy_val_pix[-1]))
-
-        metrics = {'loss_train': loss_train, 'loss_val': loss_val, 'accuracy_train':accuracy_train, 
-                   'accuracy_train_pix': accuracy_train_pix, 'accuracy_val':accuracy_val, 
-                   'accuracy_val_pix': accuracy_val_pix}
-        final_pred = predictions
+        metrics = {'loss_train': total_loss_train, 'loss_val': total_loss_val, 'accuracy_train':total_accuracy_train, 
+                   'accuracy_train_pix': total_accuracy_train_pix, 'accuracy_val':total_accuracy_val, 
+                   'accuracy_val_pix': total_accuracy_val_pix}
+        final_pred = total_predictions
         
-        return metrics, final_pred, wrong_pred
+        return metrics, final_pred, total_wrong_predictions
     
 class MetaTaskSolver:        
 
-    def train(self, task, model_name, criterion, n_epoch=30, lr=0.1, device = "cpu", verbose=True,  inner_lr = 0.1, inner_iter = 10, meta_size = 50):
+    def train(self, tasks, model_name, criterion, n_epoch=30, lr=0.1, device = "cpu", verbose=True,  inner_lr = 0.1, inner_iter = 10, meta_size = 50):
         """
         trains the given model
         
@@ -156,160 +176,185 @@ class MetaTaskSolver:
         :lr: learning rate for the optimization
         :device: whether to use CPU or GPU
         :verbose: if set to True prints additional info
+        :inner_lr: if using a meta-learning algorithm, the learning rate of the inner loop
+        :inner_iter: if using a meta-learning algorithm, the iterations of the inner loop
+        :meta_size: if using a meta-learning algorithm, how big to set the meta samples size
         
         :returns: the obtained metrics, the final predictions and the wrong ones
         """
         
-        loss_train = []
-        loss_val = []
-        accuracy_val = []
-        accuracy_train = []
-        accuracy_val_pix = []
-        accuracy_train_pix = []
-
-        sh1_big = 0
-        sh2_big = 0
-        for i in range(len(task['train'])):
-            sh1 = task['train'][i]['input'].shape[0]
-            sh2 = task['train'][i]['input'].shape[1]
-            if sh1 > sh1_big:
-                sh1_big = sh1
-            if sh2 > sh2_big:
-                sh2_big = sh2     
-        for i in range(len(task['test'])):
-            sh1 = task['test'][i]['input'].shape[0]
-            sh2 = task['test'][i]['input'].shape[1]
-            if sh1 > sh1_big:
-                sh1_big = sh1
-            if sh2 > sh2_big:
-                sh2_big = sh2
-                
-        net = model_name(task['train'], sh1_big, sh2_big).to(device)
-        criterion = criterion()
-        optimizer = Adam(net.parameters(), lr = lr)
+        total_loss_train = []
+        total_loss_val = []
+        total_accuracy_val = []
+        total_accuracy_train = []
+        total_accuracy_val_pix = []
+        total_accuracy_train_pix = []
+        total_predictions = []
+        total_wrong_predictions = []
         
-        inputs = []
-        outputs = []
-        for sample in task["train"]:
-            inputs.append(FloatTensor(expand(sample['input'])).to(device))
-            outputs.append(LongTensor(sample['output']).unsqueeze(dim=0).to(device))
+        criterion = criterion()
+        
+        for task in tasks:
             
-        inputs_train = inputs[:meta_size]
-        inputs_val = inputs[meta_size:]
-        outputs_train = outputs[:meta_size]
-        outputs_val = outputs[meta_size:]
             
-        for epoch in tqdm(range(n_epoch)):
+            sh1_big = 0
+            sh2_big = 0
+            for i in range(len(task['train'])):
+                sh1 = task['train'][i]['input'].shape[0]
+                sh2 = task['train'][i]['input'].shape[1]
+                if sh1 > sh1_big:
+                    sh1_big = sh1
+                if sh2 > sh2_big:
+                    sh2_big = sh2     
+            for i in range(len(task['test'])):
+                sh1 = task['test'][i]['input'].shape[0]
+                sh2 = task['test'][i]['input'].shape[1]
+                if sh1 > sh1_big:
+                    sh1_big = sh1
+                if sh2 > sh2_big:
+                    sh2_big = sh2
+                    
+            net = model_name(task['train'], sh1_big, sh2_big).to(device)
+            optimizer = Adam(net.parameters(), lr = lr)
             
-            fast_weights = OrderedDict(net.named_parameters())
-            losses = []
-            
-            for _ in range(inner_iter):
-                grads = []
-                loss = 0
-                for x,y in zip(inputs_train, outputs_train):
+            loss_train = []
+            loss_val = []
+            accuracy_val = []
+            accuracy_train = []
+            accuracy_val_pix = []
+            accuracy_train_pix = []
+
+            inputs = []
+            outputs = []
+            for sample in task["train"]:
+                inputs.append(FloatTensor(expand(sample['input'])).to(device))
+                outputs.append(LongTensor(sample['output']).unsqueeze(dim=0).to(device))
+
+            inputs_train = inputs[:meta_size]
+            inputs_val = inputs[meta_size:]
+            outputs_train = outputs[:meta_size]
+            outputs_val = outputs[meta_size:]
+
+            for epoch in tqdm(range(n_epoch)):
+
+                fast_weights = OrderedDict(net.named_parameters())
+                losses = []
+
+                for _ in range(inner_iter):
+                    grads = []
+                    loss = 0
+                    for x,y in zip(inputs_train, outputs_train):
+                        logits = net._forward(x.to(device), fast_weights)
+                        loss += criterion(logits.to(device), y.to(device))
+                    loss /= len(inputs_train)
+                    gradients = torch.autograd.grad(loss, fast_weights.values(), create_graph=True)
+                    fast_weights = OrderedDict((name, param - inner_lr * grad)
+                              for ((name, param), grad) in zip(fast_weights.items(), gradients))
+
+                loss = 0    
+                for x,y in zip(inputs_val, outputs_val):
                     logits = net._forward(x.to(device), fast_weights)
                     loss += criterion(logits.to(device), y.to(device))
-                loss /= len(inputs_train)
+
+                loss /= len(inputs_val)
+                loss.backward(retain_graph=True)
+                losses.append(loss)
                 gradients = torch.autograd.grad(loss, fast_weights.values(), create_graph=True)
-                fast_weights = OrderedDict((name, param - inner_lr * grad)
-                          for ((name, param), grad) in zip(fast_weights.items(), gradients))
-            
-            loss = 0    
-            for x,y in zip(inputs_val, outputs_val):
-                logits = net._forward(x.to(device), fast_weights)
-                loss += criterion(logits.to(device), y.to(device))
 
-            loss /= len(inputs_val)
-            loss.backward(retain_graph=True)
-            losses.append(loss)
-            gradients = torch.autograd.grad(loss, fast_weights.values(), create_graph=True)
-            
-            net.train()
-            optimizer.zero_grad()
-            meta_loss = torch.stack(losses).mean()
-            meta_loss.backward()
-            optimizer.step()
-                  
-            net.eval()
-            with torch.no_grad():
+                net.train()
+                optimizer.zero_grad()
+                meta_loss = torch.stack(losses).mean()
+                meta_loss.backward()
+                optimizer.step()
 
-                correct_val = 0
-                correct_val_pix = 0
-                total_val = 0
-                loss_iter_val = 0
-                predictions = []
-                wrong_pred = []
-                n_pixels_val = 0
-                for sample in task['test']:
+                net.eval()
+                with torch.no_grad():
+
+                    correct_val = 0
+                    correct_val_pix = 0
+                    total_val = 0
+                    loss_iter_val = 0
+                    predictions = []
+                    wrong_pred = []
+                    n_pixels_val = 0
+                    for sample in task['test']:
+
+                        img = FloatTensor(expand(sample['input'])).to(device)
+                        labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
+                        outputs = net(img)
+                        _, pred = torch.max(outputs.data, 1)
+                        predictions.append((img, pred))  
+                        n_pixels_val += pred.shape[1]*pred.shape[2]
+
+                        total_val += labels.size(0)
+                        flag =  (torch.all(torch.eq(pred, labels))).sum().item() 
+                        correct_val += flag
+                        if flag == 0:
+                            wrong_pred.append((img, pred))
+                        correct_val_pix += (torch.eq(pred, labels)).sum().item()            
+                        loss = criterion(outputs, labels)
+                        loss_iter_val += loss.item()
+
+                correct_train = 0
+                correct_train_pix = 0 
+                total_train = 0
+                loss_iter_train = 0
+                n_pixels_train = 0
+                for sample in task['train']:
 
                     img = FloatTensor(expand(sample['input'])).to(device)
                     labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
                     outputs = net(img)
                     _, pred = torch.max(outputs.data, 1)
-                    predictions.append((img, pred))  
-                    n_pixels_val += pred.shape[1]*pred.shape[2]
+                    n_pixels_train += pred.shape[1]*pred.shape[2]
 
-                    total_val += labels.size(0)
-                    flag =  (torch.all(torch.eq(pred, labels))).sum().item() 
-                    correct_val += flag
-                    if flag == 0:
-                        wrong_pred.append((img, pred))
-                    correct_val_pix += (torch.eq(pred, labels)).sum().item()            
+                    total_train += labels.size(0)
+                    correct_train += (torch.all(torch.eq(pred, labels))).sum().item()
+                    correct_train_pix += (torch.eq(pred, labels)).sum().item()
                     loss = criterion(outputs, labels)
-                    loss_iter_val += loss.item()
+                    loss_iter_train += loss.item()
 
-            correct_train = 0
-            correct_train_pix = 0 
-            total_train = 0
-            loss_iter_train = 0
-            n_pixels_train = 0
-            for sample in task['train']:
+                loss_train.append(loss_iter_train/len(task['train']))
+                loss_val.append(loss_iter_val/len(task['test']))
 
-                img = FloatTensor(expand(sample['input'])).to(device)
-                labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
-                outputs = net(img)
-                _, pred = torch.max(outputs.data, 1)
-                n_pixels_train += pred.shape[1]*pred.shape[2]
+                val_accuracy = 100 * correct_val / total_val
+                val_accuracy_pix = 100 * correct_val_pix/(n_pixels_val)
+                accuracy_val.append(val_accuracy)
+                accuracy_val_pix.append(val_accuracy_pix)
 
-                total_train += labels.size(0)
-                correct_train += (torch.all(torch.eq(pred, labels))).sum().item()
-                correct_train_pix += (torch.eq(pred, labels)).sum().item()
-                loss = criterion(outputs, labels)
-                loss_iter_train += loss.item()
-              
-            loss_train.append(loss_iter_train/len(task['train']))
-            loss_val.append(loss_iter_val/len(task['test']))
+                train_accuracy = 100 * correct_train / total_train
+                train_accuracy_pix = 100 * correct_train_pix/(n_pixels_train)
+                accuracy_train.append(train_accuracy)
+                accuracy_train_pix.append(train_accuracy_pix)
 
-            val_accuracy = 100 * correct_val / total_val
-            val_accuracy_pix = 100 * correct_val_pix/(n_pixels_val)
-            accuracy_val.append(val_accuracy)
-            accuracy_val_pix.append(val_accuracy_pix)
-
-            train_accuracy = 100 * correct_train / total_train
-            train_accuracy_pix = 100 * correct_train_pix/(n_pixels_train)
-            accuracy_train.append(train_accuracy)
-            accuracy_train_pix.append(train_accuracy_pix)
-
-            if verbose:
-                print('\nEpoch: ['+str(epoch+1)+'/'+str(n_epoch)+']')
-                print('Train loss is: {}'.format(loss_train[-1]))
-                print('Validation loss is: {}'.format(loss_val[-1]))
-                print('Train accuracy is: {} %'.format(accuracy_train[-1]))
-                print('Train accuracy for pixels is: {} %'.format(accuracy_train_pix[-1]))
-                print('Validation accuracy is: {} %'.format(accuracy_val[-1]))
-                print('Validation accuracy for pixels is: {} %'.format(accuracy_val_pix[-1]))
-
-        metrics = {'loss_train': loss_train, 'loss_val': loss_val, 'accuracy_train':accuracy_train, 
-                   'accuracy_train_pix': accuracy_train_pix, 'accuracy_val':accuracy_val, 
-                   'accuracy_val_pix': accuracy_val_pix}
-        final_pred = predictions
+                if verbose:
+                    print('\nEpoch: ['+str(epoch+1)+'/'+str(n_epoch)+']')
+                    print('Train loss is: {}'.format(loss_train[-1]))
+                    print('Validation loss is: {}'.format(loss_val[-1]))
+                    print('Train accuracy is: {} %'.format(accuracy_train[-1]))
+                    print('Train accuracy for pixels is: {} %'.format(accuracy_train_pix[-1]))
+                    print('Validation accuracy is: {} %'.format(accuracy_val[-1]))
+                    print('Validation accuracy for pixels is: {} %'.format(accuracy_val_pix[-1]))
+               
+                total_loss_train.append(loss_train)
+                total_loss_val.append(loss_val)
+                total_accuracy_train.append(accuracy_train)
+                total_accuracy_train_pix.append(accuracy_train_pix)
+                total_accuracy_val.append(accuracy_val)
+                total_accuracy_val_pix.append(accuracy_val_pix)
+                total_predictions.append(total_predictions)
+                total_wrong_predictions.append(wrong_pred)
+                
+        metrics = {'loss_train': total_loss_train, 'loss_val': total_loss_val, 'accuracy_train':total_accuracy_train, 
+                   'accuracy_train_pix': total_accuracy_train_pix, 'accuracy_val':total_accuracy_val, 
+                   'accuracy_val_pix': total_accuracy_val_pix}
+        final_pred = total_predictions
         
-        return metrics, final_pred, wrong_pred
+        return metrics, final_pred, total_wrong_predictions
 
     
 
-def evaluate_metrics(ts, task, model_name, criterion, n_epoch, lr, device,  verbose, inner_lr = None, inner_iter = None, meta_size = 1):
+def evaluate_metrics(ts, tasks, model_name, criterion, n_epoch, lr, device,  verbose, inner_lr = None, inner_iter = None, meta_size = 1):
     """
     evaluates the metric of the given model on the given task
     
@@ -323,16 +368,17 @@ def evaluate_metrics(ts, task, model_name, criterion, n_epoch, lr, device,  verb
     :verbose: if set to True prints additional info
     :inner_lr: if using a meta-learning algorithm, the learning rate of the inner loop
     :inner_iter: if using a meta-learning algorithm, the iterations of the inner loop
+    :meta_size: if using a meta-learning algorithm, how big to set the meta samples size
     
     :returns: the obtained metrics, the final predictions and the wrong ones
     """
     
     if inner_lr is not None and inner_iter is not None:
         ts = MetaTaskSolver()
-        return ts.train(task, model_name, criterion, n_epoch, lr, device, verbose, inner_lr, inner_iter, meta_size)
+        return ts.train(tasks, model_name, criterion, n_epoch, lr, device, verbose, inner_lr, inner_iter, meta_size)
     else:
         ts = TaskSolver()
-        return ts.train(task, model_name, criterion, n_epoch, lr, device, verbose)
+        return ts.train(tasks, model_name, criterion, n_epoch, lr, device, verbose)
 
 def plot_metrics(train_result):
     """
