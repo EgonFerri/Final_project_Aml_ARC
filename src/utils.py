@@ -135,7 +135,7 @@ def check_dim(data_path, dataset='train'):
             't2':type_2, 't2_1':type_2_1,'t2_2':type_2_2,'t2_3':type_2_3}
 
 
-def dimension_explained(dataset = 'train'):
+def dimension_explained(data_path, dataset = 'train'):
     """
     prints the various types of tasks and their caracteristics
 
@@ -143,7 +143,7 @@ def dimension_explained(dataset = 'train'):
     """
 
     print('------------', dataset, ' shapes ------------')
-    dic = check_dim(dataset)
+    dic = check_dim(data_path, dataset)
     print('t1 all inputs are equal: ', len(dic['t1']), 'of which: ')
     print('t1_1 also output equal: ', len(dic['t1_1']))
     print('t1_2 output smaller but fixed: ', len(dic['t1_2']))
