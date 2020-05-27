@@ -148,14 +148,14 @@ class TaskSolver:
                     print('Validation accuracy is: {} %'.format(accuracy_val[-1]))
                     print('Validation accuracy for pixels is: {} %'.format(accuracy_val_pix[-1]))
                     
-                total_loss_train.append(loss_train)
-                total_loss_val.append(loss_val)
-                total_accuracy_train.append(accuracy_train)
-                total_accuracy_train_pix.append(accuracy_train_pix)
-                total_accuracy_val.append(accuracy_val)
-                total_accuracy_val_pix.append(accuracy_val_pix)
-                total_predictions.append(predictions)
-                total_wrong_predictions.append(wrong_pred)
+        total_loss_train += loss_train
+        total_loss_val += loss_val
+        total_accuracy_train += accuracy_train
+        total_accuracy_train_pix += accuracy_train_pix
+        total_accuracy_val += accuracy_val
+        total_accuracy_val_pix += accuracy_val_pix
+        total_predictions += predictions
+        total_wrong_predictions += wrong_pred
 
         metrics = {'loss_train': total_loss_train, 'loss_val': total_loss_val, 'accuracy_train':total_accuracy_train, 
                    'accuracy_train_pix': total_accuracy_train_pix, 'accuracy_val':total_accuracy_val, 
