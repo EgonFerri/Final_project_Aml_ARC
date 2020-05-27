@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 from collections import OrderedDict
 from utils import expand
 
