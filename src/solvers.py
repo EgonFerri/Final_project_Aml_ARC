@@ -411,35 +411,50 @@ def plot_metrics(train_result):
 
     plt.show()
 
-    def inverse_10_channels(res):
-        a = np.array(res)
-        img = np.full((a.shape[1], a.shape[2]), 0, dtype=np.uint8)
-        for i in range(10):
-            img = np.add(img, np.where(a[i]>0, i, a[i]))
-            
-        return img
+def compare_plots(name, n = 4):
+    """
+    plots predictions obtained and compare to the input
+    """
+  
+    results = load_results(path, name)
+    cmap = colors.ListedColormap(
+        ['#000000', '#0074D9','#FF4136','#2ECC40','#FFDC00',
+        '#AAAAAA', '#F012BE', '#FF851B', '#7FDBFF', '#870C25'])
+    norm = colors.Normalize(vmin=0, vmax=9)
+    fig, axs = plt.subplots(2, n, figsize=(4*n,8), dpi=50)
+
+    for i in range(n):
+      _, original = torch.max(results[i][0], 0)
+      original = original.cpu()
+      predicted = results[i][1].squeeze(0).cpu()
+      axs[0][i].imshow(original, cmap=cmap, norm=norm)
+      axs[0][i].set_title('Original')
+      axs[1][i].imshow(predicted, cmap=cmap, norm=norm)
+      axs[1][i].set_title('Predicted')
+
+    plt.show()
 
 def save_results(path, list_res, list_names):
-  """
-  save results output from evaluate function.
+    """
+    save results output from evaluate function.
   
-  :path: path to directory in which save files
-  :list_res: list including the three output of evaluate function
-  :list_names: list of names to give to each output file in list_res  
-  """
-  with open(path+list_names[0]+'.pickle', 'wb') as handle:
-    pickle.dump(list_res[0], handle, protocol=pickle.HIGHEST_PROTOCOL)
-  with open(path+list_names[1]+'.pickle', 'wb') as handle:
-    pickle.dump(list_res[1], handle, protocol=pickle.HIGHEST_PROTOCOL)
-  with open(path+list_names[2]+'.pickle', 'wb') as handle:
-    pickle.dump(list_res[2], handle, protocol=pickle.HIGHEST_PROTOCOL)
+    :path: path to directory in which save files
+    :list_res: list including the three output of evaluate function
+    :list_names: list of names to give to each output file in list_res  
+    """
+    with open(path+list_names[0]+'.pickle', 'wb') as handle:
+      pickle.dump(list_res[0], handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(path+list_names[1]+'.pickle', 'wb') as handle:
+      pickle.dump(list_res[1], handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(path+list_names[2]+'.pickle', 'wb') as handle:
+      pickle.dump(list_res[2], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 def load_results(path, filename):
-  """
-  load result from pickle files.
+    """
+    load result from pickle files.
   
-  :path: path to directory in which file is located
-  :filename: name of the file (without pickle extention) 
-  """  
-  with open(path+filename+'.pickle', 'rb') as handle:
-    return pickle.load(handle)
+    :path: path to directory in which file is located
+    :filename: name of the file (without pickle extention) 
+    """  
+    with open(path+filename+'.pickle', 'rb') as handle:
+      return pickle.load(handle)
