@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import pickle
 from collections import OrderedDict
 from utils import expand
 
@@ -371,6 +372,7 @@ def evaluate_metrics(ts, tasks, model_name, criterion, n_epoch, lr, device,  ver
     :inner_lr: if using a meta-learning algorithm, the learning rate of the inner loop
     :inner_iter: if using a meta-learning algorithm, the iterations of the inner loop
     :meta_size: if using a meta-learning algorithm, how big to set the meta samples size
+    :attention: wheter to use attention mechanism in the model
     
     :returns: the obtained metrics, the final predictions and the wrong ones
     """
@@ -417,3 +419,27 @@ def plot_metrics(train_result):
             
         return img
 
+def save_results(path, list_res, list_names):
+  """
+  save results output from evaluate function.
+  
+  :path: path to directory in which save files
+  :list_res: list including the three output of evaluate function
+  :list_names: list of names to give to each output file in list_res  
+  """
+  with open(path+list_names[0]+'.pickle', 'wb') as handle:
+    pickle.dump(list_res[0], handle, protocol=pickle.HIGHEST_PROTOCOL)
+  with open(path+list_names[1]+'.pickle', 'wb') as handle:
+    pickle.dump(list_res[1], handle, protocol=pickle.HIGHEST_PROTOCOL)
+  with open(path+list_names[2]+'.pickle', 'wb') as handle:
+    pickle.dump(list_res[2], handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+def load_results(path, filename):
+  """
+  load result from pickle files.
+  
+  :path: path to directory in which file is located
+  :filename: name of the file (without pickle extention) 
+  """  
+  with open(path+filename+'.pickle', 'rb') as handle:
+    return pickle.load(handle)
