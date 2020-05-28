@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from matplotlib import colors
 import pickle
 from collections import OrderedDict
 from utils import expand
@@ -411,12 +412,11 @@ def plot_metrics(train_result):
 
     plt.show()
 
-def compare_plots(path, name, n = 4):
+def compare_plots(results, n = 4):
     """
     plots predictions obtained and compare to the input
     """
-  
-    results = load_results(path, name)
+    
     cmap = colors.ListedColormap(
         ['#000000', '#0074D9','#FF4136','#2ECC40','#FFDC00',
         '#AAAAAA', '#F012BE', '#FF851B', '#7FDBFF', '#870C25'])
