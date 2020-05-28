@@ -411,7 +411,7 @@ def plot_metrics(train_result):
 
     plt.show()
 
-def compare_plots(name, n = 4):
+def compare_plots(path, name, n = 4):
     """
     plots predictions obtained and compare to the input
     """
