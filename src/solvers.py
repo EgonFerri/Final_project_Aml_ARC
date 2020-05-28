@@ -434,6 +434,19 @@ def compare_plots(results, n = 4):
 
     plt.show()
 
+def find_correct_pred(pred_all, pred_wrong):
+    """
+    return a list of correct predictions
+    """
+    correct = []
+    for t in pred_all:
+      t_check = np.array(t[1].squeeze(0).cpu())
+      for t_wrong in pred_wrong:
+        t_wrong_check = np.array(t_wrong[1].squeeze(0).cpu())
+        if (t_check != t_wrong_check).all():
+          correct.append(t)
+    return correct
+
 def save_results(path, list_res, list_names):
     """
     save results output from evaluate function.
