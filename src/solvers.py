@@ -12,12 +12,13 @@ from utils import expand
 
 class TaskSolver:        
 
-    def train(self, tasks, model_name, criterion, n_epoch=30, lr=0.1, device = "cpu", verbose=True):
+    def train(self, tasks, model_name, criterion, attention, device, n_epoch=30, lr=0.1, verbose=True):
         """
         trains the given model
         
         :task: task to train the model on
         :criterion: loss for train
+        :attention: whether to use attention mechanism
         :model_name: name of the model to train
         :n_epoch: number of epochs for training
         :lr: learning rate for the optimization
@@ -56,7 +57,7 @@ class TaskSolver:
                 if sh2 > sh2_big:
                     sh2_big = sh2  
                     
-            net = model_name(task['train'], sh1_big, sh2_big).to(device)
+            net = model_name(task['train'], sh1_big, sh2_big, attention).to(device)
             optimizer = Adam(net.parameters(), lr = lr)
         
             loss_train = []
@@ -355,7 +356,7 @@ class MetaTaskSolver:
 
     
 
-def evaluate_metrics(ts, tasks, model_name, criterion, n_epoch, lr, device,  verbose, inner_lr = None, inner_iter = None, meta_size = 1):
+def evaluate_metrics(ts, tasks, model_name, criterion, n_epoch, lr, device,  verbose, inner_lr = None, inner_iter = None, meta_size = 1, attention = None):
     """
     evaluates the metric of the given model on the given task
     
@@ -379,7 +380,7 @@ def evaluate_metrics(ts, tasks, model_name, criterion, n_epoch, lr, device,  ver
         return ts.train(tasks, model_name, criterion, n_epoch, lr, device, verbose, inner_lr, inner_iter, meta_size)
     else:
         ts = TaskSolver()
-        return ts.train(tasks, model_name, criterion, n_epoch, lr, device, verbose)
+        return ts.train(tasks, model_name, criterion, attention, device, n_epoch, lr, verbose)
 
 def plot_metrics(train_result):
     """
