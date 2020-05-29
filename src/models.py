@@ -300,17 +300,15 @@ class BasicBlock(nn.Module):
         
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, 
                               stride=stride, padding=2, bias=False)
-        # self.bn1 = nn.BatchNorm2d(planes)
+
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
                                stride=1, bias=False)
-        # self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_planes, self.expansion*planes,
                           kernel_size=1, stride=stride, bias=False)
-                # nn.BatchNorm2d(self.expansion*planes)
             )
 
     def forward(self,x):
@@ -321,30 +319,19 @@ class BasicBlock(nn.Module):
         return out
     
     def _forward(self, n, i, weights, x):
-        running_mu = torch.zeros(self.planes).to(self.device)
-        running_std = torch.ones(self.planes).to(self.device)
         out = F.conv2d(x, weights["layer{}.{}.conv1.weight".format(n,i)], stride = self.stride,padding = 2)
-        out = F.relu(out)#F.batch_norm(out,running_mu, running_std,
-                      #  weights["layer{}.{}.bn1.weight".format(n,i)], 
-                      #  weights["layer{}.{}.bn1.bias".format(n,i)],training = True))
+        out = F.relu(out)
         out = F.conv2d(out, weights["layer{}.{}.conv2.weight".format(n,i)])
-        # out = F.batch_norm(out,  running_mu, running_std,
-                      #  weights["layer{}.{}.bn2.weight".format(n,i)],
-                      #  weights["layer{}.{}.bn2.bias".format(n,i)], training = True)
         conv = 0
         if self.stride != 1 or self.in_planes != self.expansion*self.planes:
             
             conv = F.conv2d(x, weights["layer{}.{}.shortcut.0.weight".format(n,i)],stride = self.stride)
-            # bn = F.batch_norm(conv,  running_mu, running_std,
-                                      # weights["layer{}.{}.shortcut.1.weight".format(n,i)],
-                                      # weights["layer{}.{}.shortcut.1.bias".format(n,i)], training = True)
-          
             x += conv
                                 
         out = F.relu(out)
         return out
     
- 
+    
 
 class ResNet(nn.Module):
     """
@@ -353,22 +340,20 @@ class ResNet(nn.Module):
     reference: https://github.com/kuangliu/pytorch-cifar/blob/master/models/resnet.py
     """
     
-    def __init__(self,device, task_train, w, h, block = BasicBlock, num_blocks = [1,1,1,1], num_classes=10):
+    def __init__(self,device, w, h, block = BasicBlock, num_blocks = [1,1,1,1], num_classes=10):
       
         super(ResNet, self).__init__()
-        self.in_planes = 64
+        self.in_planes = 8
         self.largest_w = w
         self.largest_h = h
         self.device = device
-        self.out_dim = np.array(np.array(task_train[0]['output']).shape)
 
-        self.conv1 = nn.Conv2d(10, 64, kernel_size=3, padding = 1,stride=1, bias=False)
-        # self.bn1 = nn.BatchNorm2d(64)
-        self.layer1 = self._make_layer(1, block, 64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(2, block, 64, num_blocks[1], stride=1)
-        self.layer3 = self._make_layer(3, block, 64, num_blocks[2], stride=1)
-        self.layer4 = self._make_layer(4, block, 64, num_blocks[3], stride=1)
-        self.linear = nn.Linear(64*w*h, 10*self.out_dim[0]*self.out_dim[1])
+        self.conv1 = nn.Conv2d(10, 8, kernel_size=3, padding = 1,stride=1, bias=False)
+        self.layer1 = self._make_layer(1, block, 8, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(2, block, 8, num_blocks[1], stride=1)
+        self.layer3 = self._make_layer(3, block, 8, num_blocks[2], stride=1)
+        self.layer4 = self._make_layer(4, block, 8, num_blocks[3], stride=1)
+        self.linear = nn.Linear(8*w*h, 10*w*h)
 
 
     def _make_layer(self, n, block, planes, num_blocks, stride):
@@ -392,8 +377,7 @@ class ResNet(nn.Module):
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         
-        x = torch.reshape(out, (1, 10, self.out_dim[0], self.out_dim[1])) 
-        x = pad_crop(x, input_w, input_h, self.largest_w, self.largest_h, goal='crop')
+        x = torch.reshape(out, (1, 10, self.largest_w,self.largest_h )) 
         return x
      
     def _forward(self, x, weights):
@@ -402,7 +386,7 @@ class ResNet(nn.Module):
         x = x.unsqueeze(0)
         
         out = F.conv2d(x, weights["conv1.weight"], padding = 1)
-        out = F.relu(out)#F.batch_norm(out,running_mu, running_std, training = True))
+        out = F.relu(out)
         
         for i, layer in enumerate(self.layer1):
             out = layer._forward(1, i, weights, out)
@@ -416,6 +400,5 @@ class ResNet(nn.Module):
         out = out.view(out.size(0), -1)
         out = F.linear(out, weights["linear.weight"], weights["linear.bias"])
         
-        x = torch.reshape(out, (1, 10, self.out_dim[0], self.out_dim[1])) 
-        x = pad_crop(x, input_w, input_h, self.largest_w, self.largest_h, goal='crop')
+        x = torch.reshape(out, (1, 10, self.largest_w, self.largest_h)) 
         return x
