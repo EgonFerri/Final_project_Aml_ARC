@@ -103,6 +103,52 @@ class FullyCon_deep(nn.Module):
         x = torch.reshape(x, (1, 10, self.out_dim[0], self.out_dim[1]))
         return x  
     
+class FullyCon_deep_T4(nn.Module):
+    """
+    Fully connected for the 4th task
+    """
+    def __init__(self, task_train, w, h, attention):
+        super(FullyCon_deep_T4, self).__init__()
+
+        self.largest_w = w
+        self.largest_h = h    
+        self.linear = nn.Linear(self.largest_w*self.largest_h*10, self.largest_w*self.largest_h*10)
+        self.linear2 = nn.Linear(self.largest_w*self.largest_h*10, self.largest_w*self.largest_h*10)
+
+    def forward(self, x):
+        ch, input_w, input_h = x.shape[0], x.shape[1], x.shape[2]
+        x = pad_crop(x, self.largest_w, self.largest_h, input_w, input_h, goal='pad') 
+        x = x.view(-1).unsqueeze(0)  
+        x = self.linear(x)
+        x = F.leaky_relu(x)
+        x = self.linear2(x)
+        x = torch.reshape(x, (1, 10, self.largest_w, self.largest_h)) 
+        x = pad_crop(x, input_w, input_h, self.largest_w, self.largest_h, goal='crop')
+        return x  
+
+class FullyCon_deep_T7(nn.Module):
+    """
+    Fully connected for the 7th task
+    """
+    def __init__(self, task_train, w, h, attention):
+    super(FullyCon_deep_T7, self).__init__()
+
+        self.largest_w = w
+        self.largest_h = h
+        self.out_dim = np.array(np.array(task_train[0]['output']).shape)
+        self.linear = nn.Linear(self.largest_w*self.largest_h*10,self.out_dim[0]*self.out_dim[1]*10)
+        self.linear2 = nn.Linear(self.out_dim[0]*self.out_dim[1]*10, self.out_dim[0]*self.out_dim[1]*10)
+
+    def forward(self, x):
+        ch, input_w, input_h = x.shape[0], x.shape[1], x.shape[2]
+        x = pad_crop(x, self.largest_w, self.largest_h, input_w, input_h, goal='pad') 
+        x = x.view(-1).unsqueeze(0)  
+        x = self.linear(x)
+        x = F.leaky_relu(x)
+        x = self.linear2(x)
+        x = torch.reshape(x, (1, 10, self.out_dim[0], self.out_dim[1]))
+    return x  
+      
     
 #----------------------------------_____________________CNN___________________----------------------------------- 
     
