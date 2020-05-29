@@ -5,6 +5,7 @@ from torch.optim import Adam
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -483,3 +484,30 @@ def load_results(path, filename):
     """  
     with open(path+filename+'.pickle', 'rb') as handle:
       return pickle.load(handle)
+
+def create_df_results(path, l):
+    """
+    return a dataframe with information
+    for the results for each model.
+    
+    args:
+        l: list with filename relative
+        to each model
+    """
+    list_res = []
+    for filename in l:
+    d = dict()
+    result = load_results(path, filename)
+    names = list(result.keys())
+    idx = np.argmax(result[names[4]])
+    d[names[2]] = result[names[2]][idx]
+    d[names[3]] = result[names[3]][idx]
+    d[names[4]] = result[names[4]][idx]
+    d[names[5]] = result[names[5]][idx]
+    for i in range(len(result[names[5]])):
+        if result[names[5]][1] == 100:
+            d['100% accuracy at epoch'] = i
+        else:
+            d['100% accuracy at epoch'] = '/'
+    list_res.append(d)
+    return pd.DataFrame(list_res, index=l)
