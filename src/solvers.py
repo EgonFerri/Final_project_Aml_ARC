@@ -18,16 +18,17 @@ class TaskSolver:
         """
         trains the given model
         
-        :task: task to train the model on
-        :criterion: loss for train
-        :attention: whether to use attention mechanism
-        :model_name: name of the model to train
-        :n_epoch: number of epochs for training
-        :lr: learning rate for the optimization
-        :device: whether to use CPU or GPU
-        :verbose: if set to True prints additional info
+        args:
+            task: task to train the model on
+            criterion: loss for train
+            attention: whether to use attention mechanism
+            model_name: name of the model to train
+            n_epoch: number of epochs for training
+            lr: learning rate for the optimization
+            device: whether to use CPU or GPU
+            verbose: if set to True prints additional info
         
-        :returns: the obtained metrics, the final predictions and the wrong ones
+        returns: the obtained metrics, the final predictions and the wrong ones
         """
         
         total_loss_train = []
@@ -173,18 +174,19 @@ class MetaTaskSolver:
         """
         trains the given model
         
-        :task: task to train the model on
-        :criterion: loss for train
-        :model_name: name of the model to train
-        :n_epoch: number of epochs for training
-        :lr: learning rate for the optimization
-        :device: whether to use CPU or GPU
-        :verbose: if set to True prints additional info
-        :inner_lr: if using a meta-learning algorithm, the learning rate of the inner loop
-        :inner_iter: if using a meta-learning algorithm, the iterations of the inner loop
-        :meta_size: if using a meta-learning algorithm, how big to set the meta samples size
+        args:
+            task: task to train the model on
+            criterion: loss for train
+            model_name: name of the model to train
+            n_epoch: number of epochs for training
+            lr: learning rate for the optimization
+            device: whether to use CPU or GPU
+            verbose: if set to True prints additional info
+            inner_lr: if using a meta-learning algorithm, the learning rate of the inner loop
+            inner_iter: if using a meta-learning algorithm, the iterations of the inner loop
+            meta_size: if using a meta-learning algorithm, how big to set the meta samples size
         
-        :returns: the obtained metrics, the final predictions and the wrong ones
+        returns: the obtained metrics, the final predictions and the wrong ones
         """
         
         total_loss_train = []
@@ -199,7 +201,6 @@ class MetaTaskSolver:
         criterion = criterion()
         
         for task in tasks:
-            
             
             sh1_big = 0
             sh2_big = 0
@@ -216,138 +217,146 @@ class MetaTaskSolver:
                 if sh1 > sh1_big:
                     sh1_big = sh1
                 if sh2 > sh2_big:
-                    sh2_big = sh2
-                    
-            net = model_name(task['train'], sh1_big, sh2_big).to(device)
-            optimizer = Adam(net.parameters(), lr = lr)
+                    sh2_big = sh2  
+        
+        net = model_name(device, sh1_big, sh2_big).to(device)
+        optimizer = Adam(net.parameters(), lr = lr)
+        
+        
+        for epoch in tqdm(range(n_epoch)):
+
+            losses = []
+            for task in tasks:
             
-            loss_train = []
-            loss_val = []
-            accuracy_val = []
-            accuracy_train = []
-            accuracy_val_pix = []
-            accuracy_train_pix = []
+                  loss_train = []
+                  loss_val = []
+                  accuracy_val = []
+                  accuracy_train = []
+                  accuracy_val_pix = []
+                  accuracy_train_pix = []
 
-            inputs = []
-            outputs = []
-            for sample in task["train"]:
-                inputs.append(FloatTensor(expand(sample['input'])).to(device))
-                outputs.append(LongTensor(sample['output']).unsqueeze(dim=0).to(device))
+                  inputs = []
+                  outputs = []
+                  for sample in task["train"]:
+                   
+                      inputs.append(FloatTensor(expand(sample['input'])).to(device))
+                      y = LongTensor(sample["output"])
+                      outputs.append(pad_crop(y, sh1_big, sh2_big, y.shape[0], y.shape[1], goal = "pad").unsqueeze(0).to(device))
 
-            inputs_train = inputs[:meta_size]
-            inputs_val = inputs[meta_size:]
-            outputs_train = outputs[:meta_size]
-            outputs_val = outputs[meta_size:]
+                  inputs_train = inputs[:meta_size]
+                  inputs_val = inputs[meta_size:]
+                  outputs_train = outputs[:meta_size]
+                  outputs_val = outputs[meta_size:]
 
-            for epoch in tqdm(range(n_epoch)):
 
-                fast_weights = OrderedDict(net.named_parameters())
-                losses = []
+                  fast_weights = OrderedDict(net.named_parameters())
 
-                for _ in range(inner_iter):
-                    grads = []
-                    loss = 0
-                    for x,y in zip(inputs_train, outputs_train):
-                        logits = net._forward(x.to(device), fast_weights)
-                        loss += criterion(logits.to(device), y.to(device))
-                    loss /= len(inputs_train)
-                    gradients = torch.autograd.grad(loss, fast_weights.values(), create_graph=True)
-                    fast_weights = OrderedDict((name, param - inner_lr * grad)
-                              for ((name, param), grad) in zip(fast_weights.items(), gradients))
+                  for _ in range(inner_iter):
+                      grads = []
+                      loss = 0
+                      for x,y in zip(inputs_train, outputs_train):
+                          logits = net._forward(x.to(device), fast_weights)
+                          loss += criterion(logits.to(device), y.to(device))
+                      loss /= len(inputs_train)
+                      gradients = torch.autograd.grad(loss, fast_weights.values(), create_graph=True)
+                      fast_weights = OrderedDict((name, param - inner_lr * grad)
+                                for ((name, param), grad) in zip(fast_weights.items(), gradients))
 
-                loss = 0    
-                for x,y in zip(inputs_val, outputs_val):
-                    logits = net._forward(x.to(device), fast_weights)
-                    loss += criterion(logits.to(device), y.to(device))
+                  loss = 0    
+                  for x,y in zip(inputs_val, outputs_val):
+                      logits = net._forward(x.to(device), fast_weights)
+                      loss += criterion(logits.to(device), y.to(device))
 
-                loss /= len(inputs_val)
-                loss.backward(retain_graph=True)
-                losses.append(loss)
-                gradients = torch.autograd.grad(loss, fast_weights.values(), create_graph=True)
+                  loss /= len(inputs_val)
+                  loss.backward(retain_graph=True)
+                  losses.append(loss)
+                  gradients = torch.autograd.grad(loss, fast_weights.values(), create_graph=True)
 
-                net.train()
-                optimizer.zero_grad()
-                meta_loss = torch.stack(losses).mean()
-                meta_loss.backward()
-                optimizer.step()
+            net.train()
+            optimizer.zero_grad()
+            meta_loss = torch.stack(losses).mean()
+            meta_loss.backward()
+            optimizer.step()
 
-                net.eval()
-                with torch.no_grad():
+            net.eval()
+            with torch.no_grad():
 
-                    correct_val = 0
-                    correct_val_pix = 0
-                    total_val = 0
-                    loss_iter_val = 0
-                    predictions = []
-                    wrong_pred = []
-                    n_pixels_val = 0
-                    for sample in task['test']:
-
-                        img = FloatTensor(expand(sample['input'])).to(device)
-                        labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
-                        outputs = net(img)
-                        _, pred = torch.max(outputs.data, 1)
-                        predictions.append((img, pred))  
-                        n_pixels_val += pred.shape[1]*pred.shape[2]
-
-                        total_val += labels.size(0)
-                        flag =  (torch.all(torch.eq(pred, labels))).sum().item() 
-                        correct_val += flag
-                        if flag == 0:
-                            wrong_pred.append((img, pred))
-                        correct_val_pix += (torch.eq(pred, labels)).sum().item()            
-                        loss = criterion(outputs, labels)
-                        loss_iter_val += loss.item()
-
-                correct_train = 0
-                correct_train_pix = 0 
-                total_train = 0
-                loss_iter_train = 0
-                n_pixels_train = 0
-                for sample in task['train']:
+                correct_val = 0
+                correct_val_pix = 0
+                total_val = 0
+                loss_iter_val = 0
+                predictions = []
+                wrong_pred = []
+                n_pixels_val = 0
+                for sample in task['test']:
 
                     img = FloatTensor(expand(sample['input'])).to(device)
-                    labels = LongTensor(sample['output']).unsqueeze(dim=0).to(device)
+                    y = LongTensor(sample['output'])
+                    labels = pad_crop(y, sh1_big, sh2_big, y.shape[0], y.shape[1], "pad").unsqueeze(0).to(device)
                     outputs = net(img)
                     _, pred = torch.max(outputs.data, 1)
-                    n_pixels_train += pred.shape[1]*pred.shape[2]
+                    predictions.append((img, pred))  
+                    n_pixels_val += pred.shape[1]*pred.shape[2]
 
-                    total_train += labels.size(0)
-                    correct_train += (torch.all(torch.eq(pred, labels))).sum().item()
-                    correct_train_pix += (torch.eq(pred, labels)).sum().item()
+                    total_val += labels.size(0)
+                    flag =  (torch.all(torch.eq(pred, labels))).sum().item() 
+                    correct_val += flag
+                    if flag == 0:
+                        wrong_pred.append((img, pred))
+                    correct_val_pix += (torch.eq(pred, labels)).sum().item()            
                     loss = criterion(outputs, labels)
-                    loss_iter_train += loss.item()
+                    loss_iter_val += loss.item()
 
-                loss_train.append(loss_iter_train/len(task['train']))
-                loss_val.append(loss_iter_val/len(task['test']))
+            correct_train = 0
+            correct_train_pix = 0 
+            total_train = 0
+            loss_iter_train = 0
+            n_pixels_train = 0
+            for sample in task['train']:
 
-                val_accuracy = 100 * correct_val / total_val
-                val_accuracy_pix = 100 * correct_val_pix/(n_pixels_val)
-                accuracy_val.append(val_accuracy)
-                accuracy_val_pix.append(val_accuracy_pix)
+                img = FloatTensor(expand(sample['input'])).to(device)
+                y = LongTensor(sample['output'])
+                labels = pad_crop(y, sh1_big, sh2_big, y.shape[0], y.shape[1], "pad").unsqueeze(0).to(device)
+                outputs = net(img)
+                _, pred = torch.max(outputs.data, 1)
+                n_pixels_train += pred.shape[1]*pred.shape[2]
 
-                train_accuracy = 100 * correct_train / total_train
-                train_accuracy_pix = 100 * correct_train_pix/(n_pixels_train)
-                accuracy_train.append(train_accuracy)
-                accuracy_train_pix.append(train_accuracy_pix)
+                total_train += labels.size(0)
+                correct_train += (torch.all(torch.eq(pred, labels))).sum().item()
+                correct_train_pix += (torch.eq(pred, labels)).sum().item()
+                loss = criterion(outputs, labels)
+                loss_iter_train += loss.item()
 
-                if verbose:
-                    print('\nEpoch: ['+str(epoch+1)+'/'+str(n_epoch)+']')
-                    print('Train loss is: {}'.format(loss_train[-1]))
-                    print('Validation loss is: {}'.format(loss_val[-1]))
-                    print('Train accuracy is: {} %'.format(accuracy_train[-1]))
-                    print('Train accuracy for pixels is: {} %'.format(accuracy_train_pix[-1]))
-                    print('Validation accuracy is: {} %'.format(accuracy_val[-1]))
-                    print('Validation accuracy for pixels is: {} %'.format(accuracy_val_pix[-1]))
-               
-                total_loss_train.append(loss_train)
-                total_loss_val.append(loss_val)
-                total_accuracy_train.append(accuracy_train)
-                total_accuracy_train_pix.append(accuracy_train_pix)
-                total_accuracy_val.append(accuracy_val)
-                total_accuracy_val_pix.append(accuracy_val_pix)
-                total_predictions.append(total_predictions)
-                total_wrong_predictions.append(wrong_pred)
+            loss_train.append(loss_iter_train/len(task['train']))
+            loss_val.append(loss_iter_val/len(task['test']))
+
+            val_accuracy = 100 * correct_val / total_val
+            val_accuracy_pix = 100 * correct_val_pix/(n_pixels_val)
+            accuracy_val.append(val_accuracy)
+            accuracy_val_pix.append(val_accuracy_pix)
+
+            train_accuracy = 100 * correct_train / total_train
+            train_accuracy_pix = 100 * correct_train_pix/(n_pixels_train)
+            accuracy_train.append(train_accuracy)
+            accuracy_train_pix.append(train_accuracy_pix)
+
+            if verbose:
+                print('\nEpoch: ['+str(epoch+1)+'/'+str(n_epoch)+']')
+                print('Train loss is: {}'.format(loss_train[-1]))
+                print('Validation loss is: {}'.format(loss_val[-1]))
+                print('Train accuracy is: {} %'.format(accuracy_train[-1]))
+                print('Train accuracy for pixels is: {} %'.format(accuracy_train_pix[-1]))
+                print('Validation accuracy is: {} %'.format(accuracy_val[-1]))
+                print('Validation accuracy for pixels is: {} %'.format(accuracy_val_pix[-1]))
+            
+            total_loss_train.append(loss_train)
+            total_loss_val.append(loss_val)
+            total_accuracy_train.append(accuracy_train)
+            total_accuracy_train_pix.append(accuracy_train_pix)
+            total_accuracy_val.append(accuracy_val)
+            total_accuracy_val_pix.append(accuracy_val_pix)
+            total_predictions.append(total_predictions)
+            total_wrong_predictions.append(wrong_pred)
                 
         metrics = {'loss_train': total_loss_train, 'loss_val': total_loss_val, 'accuracy_train':total_accuracy_train, 
                    'accuracy_train_pix': total_accuracy_train_pix, 'accuracy_val':total_accuracy_val, 
@@ -356,26 +365,26 @@ class MetaTaskSolver:
         
         return metrics, final_pred, total_wrong_predictions
 
-    
 
 def evaluate_metrics(ts, tasks, model_name, criterion, n_epoch, lr, device,  verbose, inner_lr = None, inner_iter = None, meta_size = 1, attention = None):
     """
     evaluates the metric of the given model on the given task
     
-    :ts: task solver to use
-    :task: task to train the model on
-    :criterion: loss for train
-    :model_name: name of the model to train
-    :n_epoch: number of epochs for training
-    :lr: learning rate for the optimization
-    :device: whether to use CPU or GPU
-    :verbose: if set to True prints additional info
-    :inner_lr: if using a meta-learning algorithm, the learning rate of the inner loop
-    :inner_iter: if using a meta-learning algorithm, the iterations of the inner loop
-    :meta_size: if using a meta-learning algorithm, how big to set the meta samples size
-    :attention: wheter to use attention mechanism in the model
+    args:
+        ts: task solver to use
+        task: task to train the model on
+        criterion: loss for train
+        model_name: name of the model to train
+        n_epoch: number of epochs for training
+        lr: learning rate for the optimization
+        device: whether to use CPU or GPU
+        verbose: if set to True prints additional info
+        inner_lr: if using a meta-learning algorithm, the learning rate of the inner loop
+        inner_iter: if using a meta-learning algorithm, the iterations of the inner loop
+        meta_size: if using a meta-learning algorithm, how big to set the meta samples size
+        attention: wheter to use attention mechanism in the model
     
-    :returns: the obtained metrics, the final predictions and the wrong ones
+    returns: the obtained metrics, the final predictions and the wrong ones
     """
     
     if inner_lr is not None and inner_iter is not None:
@@ -450,11 +459,13 @@ def find_correct_pred(pred_all, pred_wrong):
 def save_results(path, list_res, list_names):
     """
     save results output from evaluate function.
-  
-    :path: path to directory in which save files
-    :list_res: list including the three output of evaluate function
-    :list_names: list of names to give to each output file in list_res  
+    
+    args:
+        path: path to directory in which save files
+        list_res: list including the three output of evaluate function
+        list_names: list of names to give to each output file in list_res  
     """
+    
     with open(path+list_names[0]+'.pickle', 'wb') as handle:
       pickle.dump(list_res[0], handle, protocol=pickle.HIGHEST_PROTOCOL)
     with open(path+list_names[1]+'.pickle', 'wb') as handle:
@@ -466,8 +477,9 @@ def load_results(path, filename):
     """
     load result from pickle files.
   
-    :path: path to directory in which file is located
-    :filename: name of the file (without pickle extention) 
+    args:
+        path: path to directory in which file is located
+        filename: name of the file (without pickle extention) 
     """  
     with open(path+filename+'.pickle', 'rb') as handle:
       return pickle.load(handle)
