@@ -262,10 +262,35 @@ class LSTM_T4(nn.Module):
         x = torch.reshape(x, (1, 10, self.largest_w, self.largest_h)) 
         x = pad_crop(x, input_w, input_h, self.largest_w, self.largest_h, goal='crop')
         return x
+    
+class LSTM_T7(nn.Module):
+    """
+    LSTM for the 7th task
+    """
 
+    def __init__(self, task_train, w, h, attention):
+        super(LSTM_T7, self).__init__() 
+
+        self.largest_w = w
+        self.largest_h = h
+        self.out_dim = np.array(np.array(task_train[0]['output']).shape)
+        self.lstm = nn.LSTM(self.largest_w*self.largest_h, self.out_dim[0]*self.out_dim[1], dropout=0, batch_first=True)
+        self.attention = Attention(10, 10)
+        self.attention_value = attention
+
+    def forward(self, x):     
+        ch, input_w, input_h = x.shape[0], x.shape[1], x.shape[2]
+        x = pad_crop(x, self.largest_w, self.largest_h, input_w, input_h, goal='pad')
+        x = x.view(ch, -1).unsqueeze(0)
+        x, _ = self.lstm(x)
+        if self.attention_value is not None:
+          x = torch.reshape(x, (1, x.shape[2], 10))
+          x = self.attention(x)
+        x = torch.reshape(x, (1, 10, self.out_dim[0], self.out_dim[1])) 
+        return x
     
     
-#----------------------------------_____________________LSTM___________________----------------------------------- 
+#----------------------------------_____________________GRU___________________----------------------------------- 
 
 
 class GRU(nn.Module):
@@ -292,16 +317,16 @@ class GRU(nn.Module):
         x = torch.reshape(x, (1, 10, self.out_dim[0], self.out_dim[1])) 
         return x
 
-class LSTM_T4(nn.Module):
+class GRU_T4(nn.Module):
     """
-    LSTM for the 4th task
+    GRU for the 4th task
     """
     def __init__(self, task_train, w, h, attention):
-        super(LSTM_T4, self).__init__() 
+        super(GRU_T4, self).__init__() 
 
         self.largest_w = w
         self.largest_h = h
-        self.lstm = nn.LSTM(self.largest_w*self.largest_h, self.largest_w*self.largest_h, dropout=0, batch_first=True)
+        self.lstm = nn.GRU(self.largest_w*self.largest_h, self.largest_w*self.largest_h, dropout=0, batch_first=True)
         self.attention = Attention(10, 10)
         self.attention_value = attention
         
@@ -315,6 +340,31 @@ class LSTM_T4(nn.Module):
             x = self.attention(x)
         x = torch.reshape(x, (1, 10, self.largest_w, self.largest_h)) 
         x = pad_crop(x, input_w, input_h, self.largest_w, self.largest_h, goal='crop')
+        return x
+    
+class GRU_T7(nn.Module):
+    """
+    GRU for the 7th task
+    """
+    def __init__(self, task_train, w, h, attention):
+        super(GRU_T7, self).__init__() 
+
+        self.largest_w = w
+        self.largest_h = h
+        self.out_dim = np.array(np.array(task_train[0]['output']).shape)
+        self.lstm = nn.GRU(self.largest_w*self.largest_h, self.out_dim[0]*self.out_dim[1], dropout=0, batch_first=True)
+        self.attention = Attention(10, 10)
+        self.attention_value = attention
+        
+    def forward(self, x):     
+        ch, input_w, input_h = x.shape[0], x.shape[1], x.shape[2]
+        x = pad_crop(x, self.largest_w, self.largest_h, input_w, input_h, goal='pad')
+        x = x.view(ch, -1).unsqueeze(0)
+        x, _ = self.lstm(x)
+        if self.attention_value is not None:
+            x = torch.reshape(x, (1, x.shape[2], 10))
+            x = self.attention(x)
+        x = torch.reshape(x, (1, 10, self.out_dim[0], self.out_dim[1])) 
         return x
 
     
