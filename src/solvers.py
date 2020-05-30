@@ -496,14 +496,14 @@ def create_df_results(path, l):
     """
     list_res = []
     for filename in l:
-    d = dict()
-    result = load_results(path, filename)
-    names = list(result.keys())
-    idx = np.argmax(result[names[4]])
-    d[names[2]] = result[names[2]][idx]
-    d[names[3]] = result[names[3]][idx]
-    d[names[4]] = result[names[4]][idx]
-    d[names[5]] = result[names[5]][idx]
+        d = dict()
+        result = load_results(path, filename)
+        names = list(result.keys())
+        idx = np.argmax(result[names[4]])
+        d[names[2]] = result[names[2]][idx]
+        d[names[3]] = result[names[3]][idx]
+        d[names[4]] = result[names[4]][idx]
+        d[names[5]] = result[names[5]][idx]
     for i in range(len(result[names[5]])):
         if result[names[5]][1] == 100:
             d['100% accuracy at epoch'] = i
