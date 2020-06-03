@@ -428,27 +428,22 @@ class MetaFullyCon(torch.nn.Module):
     Fully connected for meta learning
     """
     
-    def __init__(self, task_train, w, h):
+    def __init__(self, device, w, h):
         super(MetaFullyCon, self).__init__()
         self.largest_w = w
         self.largest_h = h
-        self.out_dim = np.array(np.array(task_train[0]['output']).shape)
-        self.lin = nn.Linear(10*self.largest_w*self.largest_h, 10*self.out_dim[0]*self.out_dim[1])
+        self.lin = nn.Linear(10*self.largest_w*self.largest_h, 10*self.largest_w*self.largest_h)
 
     def forward(self, x):
-        ch, input_w, input_h = x.shape[0], x.shape[1], x.shape[2]
-        x = pad_crop(x, self.largest_w, self.largest_h, input_w, input_h, goal='pad')
         x = torch.flatten(x)
         x = self.lin(x)
-        x = x.reshape((1,10,self.out_dim[0],self.out_dim[1]))
+        x = x.reshape((1,10,self.largest_w,self.largest_h))
         return x
 
     def _forward(self, x, weights):
-        ch, input_w, input_h = x.shape[0], x.shape[1], x.shape[2]
-        x = pad_crop(x, self.largest_w, self.largest_h, input_w, input_h, goal='pad')
         x = torch.flatten(x)
         x = F.linear(x, weights['lin.weight'], bias = weights['lin.bias'])
-        x = x.reshape((1,10,self.out_dim[0],self.out_dim[1]))
+        x = x.reshape((1,10,self.largest_w,self.largest_h))
         return x    
 
 class BasicBlock(nn.Module):
