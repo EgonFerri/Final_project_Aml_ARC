@@ -221,7 +221,6 @@ class MetaTaskSolver:
         net = model_name(device, sh1_big, sh2_big).to(device)
         optimizer = Adam(net.parameters(), lr = lr)
         
-        print(sh1_big, sh2_big)
         for epoch in tqdm(range(n_epoch)):
 
             losses = []
