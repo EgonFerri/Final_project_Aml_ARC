@@ -1,5 +1,5 @@
 import torch
-from torch import FloatTensor, LongTensor
+from torch import Tensor, FloatTensor, LongTensor
 from torch.autograd import Variable
 from torch.optim import Adam
 import torch.nn as nn
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 import pickle
 from collections import OrderedDict
-from utils import expand
+from utils import expand, pad_crop
 
 class TaskSolver:        
 
@@ -201,10 +201,9 @@ class MetaTaskSolver:
         
         criterion = criterion()
         
+        sh1_big = 0
+        sh2_big = 0
         for task in tasks:
-            
-            sh1_big = 0
-            sh2_big = 0
             for i in range(len(task['train'])):
                 sh1 = task['train'][i]['input'].shape[0]
                 sh2 = task['train'][i]['input'].shape[1]
@@ -219,10 +218,8 @@ class MetaTaskSolver:
                     sh1_big = sh1
                 if sh2 > sh2_big:
                     sh2_big = sh2  
-        
         net = model_name(device, sh1_big, sh2_big).to(device)
         optimizer = Adam(net.parameters(), lr = lr)
-        
         
         for epoch in tqdm(range(n_epoch)):
 
@@ -239,10 +236,12 @@ class MetaTaskSolver:
                   inputs = []
                   outputs = []
                   for sample in task["train"]:
-                   
-                      inputs.append(FloatTensor(expand(sample['input'])).to(device))
-                      y = LongTensor(sample["output"])
-                      outputs.append(pad_crop(y, sh1_big, sh2_big, y.shape[0], y.shape[1], goal = "pad").unsqueeze(0).to(device))
+                      x = Tensor(sample['input'])
+                      x = pad_crop(x, sh1_big, sh2_big, x.shape[0], x.shape[1], goal = "pad")
+                      inputs.append(FloatTensor(expand(x).float()).to(device))
+                      y = Tensor(sample['output'])
+                      y = pad_crop(y, sh1_big, sh2_big, y.shape[0], y.shape[1], goal = "pad")
+                      outputs.append(LongTensor(y.long()).unsqueeze(0).to(device))
 
                   inputs_train = inputs[:meta_size]
                   inputs_val = inputs[meta_size:]
@@ -270,7 +269,7 @@ class MetaTaskSolver:
 
                   loss /= len(inputs_val)
                   loss.backward(retain_graph=True)
-                  losses.append(loss)
+                  losses.append(loss.float())
                   gradients = torch.autograd.grad(loss, fast_weights.values(), create_graph=True)
 
             net.train()
